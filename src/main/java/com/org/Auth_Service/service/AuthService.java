@@ -4,6 +4,8 @@ import com.org.Auth_Service.dto.AuthResponse;
 import com.org.Auth_Service.dto.LoginRequest;
 import com.org.Auth_Service.dto.RegisterRequest;
 import com.org.Auth_Service.model.User;
+import com.org.Auth_Service.model.UserProfile;
+import com.org.Auth_Service.repository.UserProfileRepository;
 import com.org.Auth_Service.repository.UserRepository;
 import com.org.Auth_Service.security.JwtUtil;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -13,11 +15,14 @@ import org.springframework.stereotype.Service;
 public class AuthService {
     private final UserRepository repo;
     private final JwtUtil jwtUtil;
+    private final UserProfileRepository profileRepo;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public AuthService(UserRepository repo, JwtUtil jwtUtil) {
+    public AuthService(UserRepository repo, JwtUtil jwtUtil,
+                       UserProfileRepository profileRepo) {
         this.repo = repo;
         this.jwtUtil = jwtUtil;
+        this.profileRepo = profileRepo;
     }
 
     public AuthResponse register(RegisterRequest req) {
@@ -25,13 +30,15 @@ public class AuthService {
         u.setName(req.getName());
         u.setEmail(req.getEmail());
         u.setPassword(passwordEncoder.encode(req.getPassword()));
-        u.setRole(req.getRole());
 
-        repo.save(u);
+        repo.save(u); // Save in MySQL
+        // Save user in MongoDB too
+        UserProfile profile = new UserProfile(u.getId(), u.getName(), u.getEmail());
+        profileRepo.save(profile);
 
-        String token = jwtUtil.generateToken(u.getId(), u.getEmail(), u.getRole());
+        String token = jwtUtil.generateToken(u.getId(), u.getEmail(), u.getName());
 
-        return new AuthResponse(token, u.getId(), u.getName(), u.getEmail(), u.getRole());
+        return new AuthResponse(token, u.getId(), u.getName(), u.getEmail());
     }
     public AuthResponse login(LoginRequest req) {
         User u = repo.findByEmail(req.getEmail()).orElseThrow(() -> new RuntimeException("User not found"));
@@ -40,8 +47,8 @@ public class AuthService {
             throw new RuntimeException("Invalid credentials");
         }
 
-        String token = jwtUtil.generateToken(u.getId(), u.getEmail(), u.getRole());
+        String token = jwtUtil.generateToken(u.getId(), u.getEmail(), u.getName());
 
-        return new AuthResponse(token, u.getId(), u.getName(), u.getEmail(), u.getRole());
+        return new AuthResponse(token, u.getId(), u.getName(), u.getEmail());
     }
 }

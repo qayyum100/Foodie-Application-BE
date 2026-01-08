@@ -13,6 +13,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
@@ -23,12 +24,17 @@ public class JwtFilter extends OncePerRequestFilter {
         this.jwtUtil = jwtUtil;
     }
 
-    // Skip auth endpoints (optional but useful)
+    // Skip auth endpoints
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
-        return path.startsWith("/api/auth/login") || path.startsWith("/api/auth/register");
+        return path.startsWith("/api/auth/login") || path.startsWith("/api/auth/register") || path.startsWith("/api/rating/") ||  path.startsWith("/api/review/");
     }
+
+    //",
+    //                        "/api/rating/avg/**",
+    //                        "/api/review/count/**"
+     //
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,
@@ -42,25 +48,31 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 Claims claims = jwtUtil.extractClaims(token);
 
-                // put claims on request if you still want to use request.getAttribute("claims")
+                // optionally keep claims on request
                 req.setAttribute("claims", claims);
 
-                // build Authentication object from claims (role, email, id, etc.)
                 String email = claims.get("email", String.class);
-                String role = claims.get("role", String.class);
+//                String role = claims.get("role", String.class); // may be null
 
-                // create authorities (adjust prefix if you use ROLE_ convention)
-                SimpleGrantedAuthority authority = new SimpleGrantedAuthority(role);
+                // build authorities robustly
+//                List<SimpleGrantedAuthority> authorities;
+//                if (role != null && !role.isBlank()) {
+//                    // if you later use ROLE_ convention you may add prefix: "ROLE_" + role
+//                    authorities = Collections.singletonList(new SimpleGrantedAuthority(role));
+//                } else {
+//                    authorities = Collections.emptyList();
+//                }
+
                 UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(email, null, Collections.singletonList(authority));
+                        new UsernamePasswordAuthenticationToken(email, null, Collections.emptyList());
 
-                // set into SecurityContext -> Spring will treat request as authenticated
                 SecurityContextHolder.getContext().setAuthentication(auth);
 
             } catch (Exception ex) {
-                // invalid token -> ensure no auth left in context
+                // token invalid -> clear context and proceed (request will be blocked by security)
                 SecurityContextHolder.clearContext();
-                // (optionally) you can send 401 here, but usually better to let security handle it.
+                // optional: log ex for debugging
+                // logger.warn("JWT invalid: " + ex.getMessage());
             }
         }
 
